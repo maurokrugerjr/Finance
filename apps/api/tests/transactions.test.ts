@@ -4,7 +4,6 @@ import {
   getTestApp,
   resetDatabase,
   registerUser,
-  createAccount,
   createCategory,
   createDebt,
 } from "./helpers";
@@ -12,7 +11,6 @@ import {
 describe("transactions", () => {
   let app: FastifyInstance;
   let auth: Awaited<ReturnType<typeof registerUser>>;
-  let accountId: string;
   let categoryId: string;
 
   beforeAll(async () => {
@@ -22,9 +20,7 @@ describe("transactions", () => {
   beforeEach(async () => {
     await resetDatabase(app);
     auth = await registerUser(app);
-    const account = await createAccount(app, auth.userId);
     const category = await createCategory(app, auth.userId);
-    accountId = account.id;
     categoryId = category.id;
   });
 
@@ -43,7 +39,6 @@ describe("transactions", () => {
         amount: 250.5,
         type: "EXPENSE",
         date: new Date().toISOString(),
-        accountId,
         categoryId,
       },
     });
@@ -54,9 +49,9 @@ describe("transactions", () => {
     expect(typeof body.amount).toBe("number");
   });
 
-  it("rejects an accountId belonging to another user", async () => {
+  it("rejects a categoryId belonging to another user", async () => {
     const other = await registerUser(app);
-    const otherAccount = await createAccount(app, other.userId);
+    const otherCategory = await createCategory(app, other.userId);
 
     const res = await app.inject({
       method: "POST",
@@ -67,12 +62,74 @@ describe("transactions", () => {
         amount: 10,
         type: "EXPENSE",
         date: new Date().toISOString(),
-        accountId: otherAccount.id,
+        categoryId: otherCategory.id,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("stores the payment method (credit/debit)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/transactions",
+      headers: auth.authHeader,
+      payload: {
+        description: "Restaurante",
+        amount: 80,
+        type: "EXPENSE",
+        paymentMethod: "CREDIT",
+        date: new Date().toISOString(),
+        categoryId,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.payload).paymentMethod).toBe("CREDIT");
+  });
+
+  it("rejects an invalid payment method", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/transactions",
+      headers: auth.authHeader,
+      payload: {
+        description: "x",
+        amount: 10,
+        type: "EXPENSE",
+        paymentMethod: "PIX",
+        date: new Date().toISOString(),
         categoryId,
       },
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it("filters transactions by payment method", async () => {
+    for (const paymentMethod of ["CREDIT", "DEBIT"] as const) {
+      await app.prisma.transaction.create({
+        data: {
+          description: paymentMethod,
+          amount: 10,
+          type: "EXPENSE",
+          paymentMethod,
+          date: new Date(),
+          userId: auth.userId,
+          categoryId,
+        },
+      });
+    }
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/transactions?paymentMethod=DEBIT",
+      headers: auth.authHeader,
+    });
+
+    const body = JSON.parse(res.payload);
+    expect(body).toHaveLength(1);
+    expect(body[0].description).toBe("DEBIT");
   });
 
   it("rejects a nonexistent categoryId", async () => {
@@ -85,7 +142,6 @@ describe("transactions", () => {
         amount: 10,
         type: "EXPENSE",
         date: new Date().toISOString(),
-        accountId,
         categoryId: "00000000-0000-0000-0000-000000000000",
       },
     });
@@ -103,7 +159,6 @@ describe("transactions", () => {
         type: "INCOME",
         date: new Date(),
         userId: auth.userId,
-        accountId,
         categoryId: incomeCategory.id,
       },
     });
@@ -114,7 +169,6 @@ describe("transactions", () => {
         type: "EXPENSE",
         date: new Date(),
         userId: auth.userId,
-        accountId,
         categoryId,
       },
     });
@@ -132,7 +186,6 @@ describe("transactions", () => {
 
   it("returns 404 for a transaction belonging to another user", async () => {
     const other = await registerUser(app);
-    const otherAccount = await createAccount(app, other.userId);
     const otherCategory = await createCategory(app, other.userId);
     const otherTransaction = await app.prisma.transaction.create({
       data: {
@@ -141,7 +194,6 @@ describe("transactions", () => {
         type: "EXPENSE",
         date: new Date(),
         userId: other.userId,
-        accountId: otherAccount.id,
         categoryId: otherCategory.id,
       },
     });
@@ -163,7 +215,6 @@ describe("transactions", () => {
         type: "EXPENSE",
         date: new Date(),
         userId: auth.userId,
-        accountId,
         categoryId,
       },
     });
@@ -187,7 +238,6 @@ describe("transactions", () => {
         type: "EXPENSE",
         date: new Date(),
         userId: auth.userId,
-        accountId,
         categoryId,
       },
     });
@@ -224,7 +274,6 @@ describe("transactions", () => {
           amount: 300,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId: debtCategory.id,
         },
       });
@@ -247,7 +296,6 @@ describe("transactions", () => {
           amount: 500,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId: debtCategory.id,
         },
       });
@@ -269,7 +317,6 @@ describe("transactions", () => {
           amount: 300,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId: debtCategory.id,
         },
       });
@@ -301,7 +348,6 @@ describe("transactions", () => {
           amount: 300,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId: categoryA.id,
         },
       });
@@ -335,7 +381,6 @@ describe("transactions", () => {
           amount: 300,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId: debtCategory.id,
         },
       });
@@ -362,7 +407,6 @@ describe("transactions", () => {
           amount: 100,
           type: "EXPENSE",
           date: new Date().toISOString(),
-          accountId,
           categoryId,
         },
       });

@@ -15,33 +15,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  accounts     Account[]
   categories   Category[]
   transactions Transaction[]
   debts        Debt[]
   goals        Goal[]
-}
-
-enum AccountType {
-  CHECKING
-  SAVINGS
-  CASH
-  CREDIT_CARD
-  INVESTMENT
-}
-
-model Account {
-  id             String      @id @default(uuid())
-  name           String
-  type           AccountType
-  initialBalance Decimal     @default(0) @db.Decimal(14, 2)
-  currency       String      @default("BRL")
-  createdAt      DateTime    @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  transactions Transaction[]
 }
 
 enum CategoryKind {
@@ -75,20 +52,24 @@ enum TransactionType {
   EXPENSE
 }
 
+enum PaymentMethod {
+  DEBIT
+  CREDIT
+}
+
 model Transaction {
-  id          String          @id @default(uuid())
-  description String
-  amount      Decimal         @db.Decimal(14, 2)
-  type        TransactionType
-  date        DateTime
-  notes       String?
-  createdAt   DateTime        @default(now())
+  id            String          @id @default(uuid())
+  description   String
+  amount        Decimal         @db.Decimal(14, 2)
+  type          TransactionType
+  // Opcional: só faz sentido para gastos (crédito ou débito); receitas ficam sem.
+  paymentMethod PaymentMethod?
+  date          DateTime
+  notes         String?
+  createdAt     DateTime        @default(now())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])

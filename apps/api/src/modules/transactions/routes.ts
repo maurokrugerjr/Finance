@@ -1,14 +1,14 @@
 import { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { transactionCreateInput, transactionUpdateInput, CategoryKind } from "@finance/types";
+import { transactionCreateInput, transactionUpdateInput, CategoryKind, PaymentMethod } from "@finance/types";
 import { applyDebtPayment, reverseDebtPayment, syncDebtsForTransactionChange } from "./debt-sync";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 const listQuerySchema = z.object({
   type: CategoryKind.optional(),
   categoryId: z.string().uuid().optional(),
-  accountId: z.string().uuid().optional(),
+  paymentMethod: PaymentMethod.optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });
@@ -24,20 +24,20 @@ export const transactionRoutes: FastifyPluginAsync = async (app) => {
     const query = listQuerySchema.safeParse(request.query);
     if (!query.success) return reply.badRequest(query.error.message);
 
-    const { type, categoryId, accountId, from, to } = query.data;
+    const { type, categoryId, paymentMethod, from, to } = query.data;
 
     const transactions = await app.prisma.transaction.findMany({
       where: {
         userId: request.user.userId,
         ...(type ? { type } : {}),
         ...(categoryId ? { categoryId } : {}),
-        ...(accountId ? { accountId } : {}),
+        ...(paymentMethod ? { paymentMethod } : {}),
         ...(from || to
           ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
           : {}),
       },
       orderBy: { date: "desc" },
-      include: { category: true, account: true },
+      include: { category: true },
     });
 
     return transactions.map(serialize);
@@ -49,7 +49,7 @@ export const transactionRoutes: FastifyPluginAsync = async (app) => {
 
     const transaction = await app.prisma.transaction.findFirst({
       where: { id: params.data.id, userId: request.user.userId },
-      include: { category: true, account: true },
+      include: { category: true },
     });
     if (!transaction) return reply.notFound("Transaction not found");
 
@@ -62,19 +62,17 @@ export const transactionRoutes: FastifyPluginAsync = async (app) => {
     const body = transactionCreateInput.safeParse(request.body);
     if (!body.success) return reply.badRequest(body.error.message);
 
-    const { accountId, categoryId, ...data } = body.data;
+    const { categoryId, ...data } = body.data;
 
-    const [account, category] = await Promise.all([
-      app.prisma.account.findFirst({ where: { id: accountId, userId: request.user.userId } }),
-      app.prisma.category.findFirst({ where: { id: categoryId, userId: request.user.userId } }),
-    ]);
-    if (!account) return reply.badRequest("Invalid accountId");
+    const category = await app.prisma.category.findFirst({
+      where: { id: categoryId, userId: request.user.userId },
+    });
     if (!category) return reply.badRequest("Invalid categoryId");
 
     const transaction = await app.prisma.$transaction(async (tx) => {
       const created = await tx.transaction.create({
-        data: { ...data, accountId, categoryId, userId: request.user.userId },
-        include: { category: true, account: true },
+        data: { ...data, categoryId, userId: request.user.userId },
+        include: { category: true },
       });
 
       if (category.debtId) {
@@ -100,14 +98,7 @@ export const transactionRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!existing) return reply.notFound("Transaction not found");
 
-    const { accountId, categoryId, ...data } = body.data;
-
-    if (accountId) {
-      const account = await app.prisma.account.findFirst({
-        where: { id: accountId, userId: request.user.userId },
-      });
-      if (!account) return reply.badRequest("Invalid accountId");
-    }
+    const { categoryId, ...data } = body.data;
 
     let newCategory = existing.category;
     if (categoryId && categoryId !== existing.categoryId) {
@@ -125,10 +116,9 @@ export const transactionRoutes: FastifyPluginAsync = async (app) => {
         where: { id: existing.id },
         data: {
           ...data,
-          ...(accountId ? { accountId } : {}),
           ...(categoryId ? { categoryId } : {}),
         },
-        include: { category: true, account: true },
+        include: { category: true },
       });
 
       await syncDebtsForTransactionChange(

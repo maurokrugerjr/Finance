@@ -15,7 +15,7 @@ export async function resetDatabase(app: FastifyInstance) {
   await app.prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
       "GoalContribution", "Goal", "Debt",
-      "Transaction", "Category", "Account", "User"
+      "Transaction", "Category", "User"
     RESTART IDENTITY CASCADE
   `);
 }
@@ -49,12 +49,6 @@ export async function registerUser(
     token: body.token,
     authHeader: { authorization: `Bearer ${body.token}` },
   };
-}
-
-export async function createAccount(app: FastifyInstance, userId: string, name = "Conta Corrente") {
-  return app.prisma.account.create({
-    data: { name, type: "CHECKING", userId },
-  });
 }
 
 export async function createCategory(

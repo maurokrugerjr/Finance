@@ -4,7 +4,6 @@ import {
   getTestApp,
   resetDatabase,
   registerUser,
-  createAccount,
   createCategory,
   createDebt,
 } from "./helpers";
@@ -119,7 +118,6 @@ describe("categories", () => {
   });
 
   it("refuses to delete a category that has transactions", async () => {
-    const account = await createAccount(app, auth.userId);
     const category = await createCategory(app, auth.userId);
     await app.prisma.transaction.create({
       data: {
@@ -128,7 +126,6 @@ describe("categories", () => {
         type: "EXPENSE",
         date: new Date(),
         userId: auth.userId,
-        accountId: account.id,
         categoryId: category.id,
       },
     });

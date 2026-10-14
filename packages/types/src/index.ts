@@ -30,14 +30,8 @@ export type AuthResponse = z.infer<typeof authResponse>;
 export const CategoryKind = z.enum(["INCOME", "EXPENSE"]);
 export type CategoryKind = z.infer<typeof CategoryKind>;
 
-export const AccountType = z.enum([
-  "CHECKING",
-  "SAVINGS",
-  "CASH",
-  "CREDIT_CARD",
-  "INVESTMENT",
-]);
-export type AccountType = z.infer<typeof AccountType>;
+export const PaymentMethod = z.enum(["DEBIT", "CREDIT"]);
+export type PaymentMethod = z.infer<typeof PaymentMethod>;
 
 export const DebtStrategy = z.enum(["SNOWBALL", "AVALANCHE"]);
 export type DebtStrategy = z.infer<typeof DebtStrategy>;
@@ -67,7 +61,8 @@ export const transactionSchema = z.object({
   type: CategoryKind,
   date: z.coerce.date(),
   notes: z.string().nullable().optional(),
-  accountId: z.string().uuid(),
+  // Crédito ou débito — opcional (receitas normalmente não têm).
+  paymentMethod: PaymentMethod.nullable().optional(),
   categoryId: z.string().uuid(),
 });
 export type Transaction = z.infer<typeof transactionSchema>;

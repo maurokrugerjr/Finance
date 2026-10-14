@@ -6,7 +6,7 @@ sem fricção.
 
 ## Funcionalidades planejadas
 
-- **Receitas e contas** — cadastro do lucro/renda total por conta.
+- **Receitas** — cadastro do lucro/renda.
 - **Gastos por categoria** — lançamentos manuais categorizados (futuramente
   com importação de extratos/Open Finance).
 - **Dívidas** — cadastro de dívidas com juros, parcelas e simulação de
@@ -58,8 +58,7 @@ for criado.
 
 Definido em `apps/api/prisma/schema.prisma`:
 
-- `User` → `Account` (contas: corrente, poupança, cartão, investimento...)
-- `Category` (INCOME/EXPENSE) → `Transaction`; uma categoria EXPENSE pode
+- `Category` (INCOME/EXPENSE) → `Transaction` (com `paymentMethod` opcional: `DEBIT`/`CREDIT`); uma categoria EXPENSE pode
   opcionalmente apontar para uma `Debt` (`Category.debtId`)
 - `Debt` — só a anotação da dívida (valor total, saldo restante, juros,
   pagamento mínimo) para alimentar a simulação de estratégia; sem histórico
@@ -71,7 +70,7 @@ Definido em `apps/api/prisma/schema.prisma`:
 ### Categorias e transações
 
 - **`GET/POST /categories`**, **`GET/PATCH/DELETE /categories/:id`** — filtro `?kind=INCOME|EXPENSE`; bloqueia nome+tipo duplicado (409) e exclusão de categoria com transações (409). Aceita `debtId` (só em categorias EXPENSE, e só uma dívida do próprio usuário — 400 caso contrário) para vincular a categoria a uma dívida.
-- **`GET/POST /transactions`**, **`GET/PATCH/DELETE /transactions/:id`** — filtros `?type=`, `?categoryId=`, `?accountId=`, `?from=`/`?to=`; valida que conta e categoria pertencem ao usuário. **Toda transação lançada numa categoria vinculada a uma dívida desconta automaticamente `Debt.remainingAmount`** pelo valor da transação (nunca abaixo de zero); editar o valor ou trocar de categoria ajusta a diferença; apagar a transação reverte o desconto (sem passar de `totalAmount`). Assim, "pagar uma dívida" é só lançar um gasto na categoria certa — não existe um sub-recurso de pagamentos separado. Lógica em `apps/api/src/modules/transactions/debt-sync.ts`.
+- **`GET/POST /transactions`**, **`GET/PATCH/DELETE /transactions/:id`** — filtros `?type=`, `?categoryId=`, `?paymentMethod=DEBIT|CREDIT`, `?from=`/`?to=`; valida que a categoria pertence ao usuário. `paymentMethod` (crédito/débito) é opcional. **Toda transação lançada numa categoria vinculada a uma dívida desconta automaticamente `Debt.remainingAmount`** pelo valor da transação (nunca abaixo de zero); editar o valor ou trocar de categoria ajusta a diferença; apagar a transação reverte o desconto (sem passar de `totalAmount`). Assim, "pagar uma dívida" é só lançar um gasto na categoria certa — não existe um sub-recurso de pagamentos separado. Lógica em `apps/api/src/modules/transactions/debt-sync.ts`.
 
 ### Dívidas
 
@@ -124,7 +123,7 @@ container ao final — não usa o banco de desenvolvimento nem deixa rastro.
 pnpm --filter @finance/api test
 ```
 
-Cobertura atual (73 testes): health check, registro/login/`/me` (incluindo
+Cobertura atual (76 testes): health check, registro/login/`/me` (incluindo
 senha fraca, e-mail duplicado, mensagem genérica de erro no login), rate
 limiting em `/auth/login`, CRUD de categorias, transações, dívidas e metas
 (incluindo isolamento entre usuários e as regras de conflito/validação), o
@@ -194,7 +193,7 @@ Esqueleto inicial do projeto:
 - [x] Frontend Next.js + Tailwind com página inicial placeholder
 - [x] Docker Compose para ambiente local
 - [x] CRUD de categorias (`/categories`) — list (com filtro por `kind`), get, create, update, delete
-- [x] CRUD de transações (`/transactions`) — list (com filtros por `type`/`categoryId`/`accountId`/período), get, create, update, delete, validando que conta e categoria pertencem ao usuário
+- [x] CRUD de transações (`/transactions`) — list (com filtros por `type`/`categoryId`/`paymentMethod`/período), get, create, update, delete, validando que a categoria pertence ao usuário
 - [x] Autenticação (`/auth/register`, `/auth/login`, `/auth/me`) com bcrypt, rate limiting e expiração de JWT
 - [x] CORS restrito por origem configurável + headers de segurança (`@fastify/helmet`)
 - [x] Suíte de testes automatizados (Vitest + Testcontainers) cobrindo auth, categorias, transações e headers de segurança
