@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { registerInput, loginInput } from "@finance/types";
 
 const SALT_ROUNDS = 12;
@@ -9,7 +10,7 @@ const SALT_ROUNDS = 12;
 // que a diferença de tempo de resposta revele se uma conta existe ou não.
 const DUMMY_HASH = "$2a$12$qPfFl13O/gO86XYG7fHW6.5N0PIOOV.ni80cDvP/P/qo5SGXIwKPW";
 
-function toPublicUser(user: { id: string; email: string; name: string | null; createdAt: Date }) {
+function toPublicUser(user: { id: string; email: string; name: string; createdAt: Date }) {
   return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
 }
 
@@ -36,11 +37,21 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (existing) return reply.conflict("Email already registered");
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const user = await app.prisma.user.create({
-      data: { email, passwordHash, name },
-    });
+    let user;
+    try {
+      user = await app.prisma.user.create({
+        data: { email, passwordHash, name },
+      });
+    } catch (err) {
+      // Dois cadastros simultâneos com o mesmo e-mail passam pela checagem
+      // acima; o segundo esbarra no índice único do banco.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return reply.conflict("Email already registered");
+      }
+      throw err;
+    }
 
-    const token = app.jwt.sign({ userId: user.id });
+    const token = app.jwt.sign({ userId: user.id, tokenVersion: user.tokenVersion });
 
     return reply.code(201).send({ user: toPublicUser(user), token });
   });
@@ -58,7 +69,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.unauthorized("Invalid email or password");
     }
 
-    const token = app.jwt.sign({ userId: user.id });
+    const token = app.jwt.sign({ userId: user.id, tokenVersion: user.tokenVersion });
 
     return reply.send({ user: toPublicUser(user), token });
   });
@@ -70,5 +81,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (!user) return reply.notFound("User not found");
 
     return toPublicUser(user);
+  });
+
+  // Invalida todos os tokens do usuário (em todos os dispositivos).
+  app.post("/logout", { preHandler: [app.authenticate] }, async (request, reply) => {
+    await app.prisma.user.update({
+      where: { id: request.user.userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    return reply.code(204).send();
   });
 };

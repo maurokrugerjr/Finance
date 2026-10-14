@@ -27,7 +27,7 @@ Resumo do que já existe:
 - Resumo do dashboard em GET /dashboard/summary (totais, gastos por
   categoria, crédito × débito, série mensal, dívidas e metas)
 - CORS restrito por CORS_ORIGIN + Helmet
-- 83 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
+- 94 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
   execução, sem tocar no banco de dev)
 
 Ainda falta:

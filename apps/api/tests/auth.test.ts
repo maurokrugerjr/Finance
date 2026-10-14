@@ -36,20 +36,54 @@ describe("auth", () => {
       const res = await app.inject({
         method: "POST",
         url: "/auth/register",
-        payload: { email, password: "anotherpassword123" },
+        payload: { email, password: "anotherpassword123", name: "Outro" },
       });
 
       expect(res.statusCode).toBe(409);
+    });
+
+    it("rejects a missing or blank name", async () => {
+      for (const name of [undefined, "   "]) {
+        const res = await app.inject({
+          method: "POST",
+          url: "/auth/register",
+          payload: { email: uniqueEmail(), password: "supersecret123", name },
+        });
+        expect(res.statusCode).toBe(400);
+      }
     });
 
     it("rejects a password shorter than 8 characters", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/auth/register",
-        payload: { email: uniqueEmail(), password: "123" },
+        payload: { email: uniqueEmail(), password: "123", name: "Mauro" },
       });
 
       expect(res.statusCode).toBe(400);
+    });
+
+    it("rejects a password longer than 72 bytes even if under 72 characters", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/auth/register",
+        // 40 caracteres, mas 80 bytes em UTF-8: o bcrypt ignoraria o excedente.
+        payload: { email: uniqueEmail(), password: "ç".repeat(40), name: "Mauro" },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("returns 409 (not 500) for concurrent registrations with the same email", async () => {
+      const email = uniqueEmail();
+      const payload = { email, password: "supersecret123", name: "Mauro" };
+
+      const responses = await Promise.all(
+        [1, 2, 3].map(() => app.inject({ method: "POST", url: "/auth/register", payload })),
+      );
+
+      const statuses = responses.map((res) => res.statusCode).sort();
+      expect(statuses).toEqual([201, 409, 409]);
     });
 
     it("rejects an invalid email format", async () => {
@@ -136,6 +170,47 @@ describe("auth", () => {
         headers: { authorization: "Bearer not-a-valid-token" },
       });
       expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe("POST /auth/logout", () => {
+    it("invalidates the token used and every other token of the user", async () => {
+      const { authHeader, email, password } = await registerUser(app);
+      const login = await app.inject({ method: "POST", url: "/auth/login", payload: { email, password } });
+      const otherDevice = { authorization: `Bearer ${JSON.parse(login.payload).token}` };
+
+      const logout = await app.inject({ method: "POST", url: "/auth/logout", headers: authHeader });
+      expect(logout.statusCode).toBe(204);
+
+      for (const headers of [authHeader, otherDevice]) {
+        const me = await app.inject({ method: "GET", url: "/auth/me", headers });
+        expect(me.statusCode).toBe(401);
+      }
+    });
+
+    it("issues a working token again after logging back in", async () => {
+      const { authHeader, email, password } = await registerUser(app);
+      await app.inject({ method: "POST", url: "/auth/logout", headers: authHeader });
+
+      const login = await app.inject({ method: "POST", url: "/auth/login", payload: { email, password } });
+      const me = await app.inject({
+        method: "GET",
+        url: "/auth/me",
+        headers: { authorization: `Bearer ${JSON.parse(login.payload).token}` },
+      });
+      expect(me.statusCode).toBe(200);
+    });
+
+    it("rejects a validly signed token without tokenVersion (issued before this check existed)", async () => {
+      const { userId } = await registerUser(app);
+      const legacyToken = app.jwt.sign({ userId } as { userId: string; tokenVersion: number });
+
+      const me = await app.inject({
+        method: "GET",
+        url: "/auth/me",
+        headers: { authorization: `Bearer ${legacyToken}` },
+      });
+      expect(me.statusCode).toBe(401);
     });
   });
 });

@@ -27,14 +27,15 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      # Este compose é para rodar localmente: em "development" a API aceita o
-      # JWT_SECRET padrão. Num deploy real, usar NODE_ENV=production e um
-      # JWT_SECRET de verdade (a API se recusa a subir sem ele).
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: production
       DATABASE_URL: postgresql://finance:finance@postgres:5432/finance
-      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret}
+      # Vazio = o container gera um segredo aleatório e o guarda no volume
+      # api_data (ver apps/api/docker-entrypoint.sh).
+      JWT_SECRET: ${JWT_SECRET:-}
       PORT: 3333
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    volumes:
+      - api_data:/var/lib/finance-api
     ports:
       - "3333:3333"
 
@@ -53,3 +54,4 @@ services:
 
 volumes:
   postgres_data:
+  api_data:

@@ -33,7 +33,7 @@ export async function registerUser(
   const payload = {
     email: overrides.email ?? uniqueEmail(),
     password: overrides.password ?? "supersecret123",
-    ...(overrides.name ? { name: overrides.name } : {}),
+    name: overrides.name ?? "Usuário Teste",
   };
 
   const res = await app.inject({ method: "POST", url: "/auth/register", payload });

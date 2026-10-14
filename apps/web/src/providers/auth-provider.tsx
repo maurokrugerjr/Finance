@@ -37,6 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Invalida o token também no servidor; o apiFetch lê o token antes de
+    // ele ser apagado logo abaixo. Falha de rede não impede sair localmente.
+    if (getToken()) apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
     setToken(null);
     queryClient.clear();
     setState({ status: "unauthenticated", user: null });

@@ -3,15 +3,19 @@ import { z } from "zod";
 export const userSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
-  name: z.string().nullable().optional(),
+  name: z.string(),
   createdAt: z.coerce.date(),
 });
 export type User = z.infer<typeof userSchema>;
 
 export const registerInput = z.object({
   email: z.string().trim().toLowerCase().email(),
-  password: z.string().min(8, "Password must be at least 8 characters").max(72),
-  name: z.string().trim().min(1).max(120).optional(),
+  // O bcrypt ignora tudo além de 72 *bytes* (acentos/emojis ocupam mais de um).
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .refine((value) => new TextEncoder().encode(value).length <= 72, "Password must be at most 72 bytes"),
+  name: z.string().trim().min(1, "Name is required").max(120),
 });
 export type RegisterInput = z.infer<typeof registerInput>;
 

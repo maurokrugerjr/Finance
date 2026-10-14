@@ -20,5 +20,4 @@ ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3333
-# Aplica as migrations pendentes antes de subir (idempotente).
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm start"]
+CMD ["sh", "docker-entrypoint.sh"]

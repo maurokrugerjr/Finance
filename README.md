@@ -90,9 +90,10 @@ Todas as rotas acima exigem `Authorization: Bearer <token>` e só operam sobre d
 
 ## Autenticação
 
-- **`POST /auth/register`** — `{ email, password, name? }` → cria o usuário e já retorna `{ user, token }`.
+- **`POST /auth/register`** — `{ email, password, name }` (nome obrigatório) → cria o usuário e já retorna `{ user, token }`.
 - **`POST /auth/login`** — `{ email, password }` → retorna `{ user, token }`.
 - **`GET /auth/me`** — protegida, retorna o usuário do token atual.
+- **`POST /auth/logout`** — protegida, invalida **todos** os tokens do usuário (em todos os dispositivos) incrementando `User.tokenVersion`.
 
 Todas as demais rotas (`/categories`, `/transactions`, etc.) exigem o header
 `Authorization: Bearer <token>` e só enxergam dados do próprio usuário.
@@ -107,9 +108,17 @@ Medidas de segurança aplicadas:
   e-mail está cadastrado (mitigação de user enumeration).
 - Rate limiting (`@fastify/rate-limit`) em `/auth/register` e `/auth/login`
   (10 requisições/minuto) contra força bruta.
-- Tokens JWT expiram em 7 dias por padrão (`JWT_EXPIRES_IN`).
-- Em produção, a API recusa subir se `JWT_SECRET` não tiver sido configurado
-  com um valor real.
+- Tokens JWT expiram em 7 dias por padrão (`JWT_EXPIRES_IN`) e carregam um
+  `tokenVersion` conferido no banco a cada requisição — o logout invalida os
+  tokens emitidos antes dele.
+- O `JWT_SECRET` de exemplo (público) só é aceito com `NODE_ENV` igual a
+  `development` ou `test`; em qualquer outro caso (inclusive `NODE_ENV`
+  indefinido) a API exige um segredo de 32+ caracteres e se recusa a subir.
+- Senha limitada a 72 **bytes** (limite real do bcrypt; acentos ocupam 2).
+- Cadastros simultâneos com o mesmo e-mail retornam 409, não 500.
+- No frontend: Content-Security-Policy com nonce por requisição
+  (`apps/web/src/middleware.ts`) e cabeçalhos de segurança no `next.config.js`
+  — relevantes porque o token fica no `localStorage`.
 - **CORS** restrito à(s) origem(ns) configurada(s) em `CORS_ORIGIN` (por
   padrão só `http://localhost:3000`) — não reflete qualquer origem.
 - **`@fastify/helmet`** habilitado para os headers de segurança HTTP padrão
@@ -127,7 +136,7 @@ container ao final — não usa o banco de desenvolvimento nem deixa rastro.
 pnpm --filter @finance/api test
 ```
 
-Cobertura atual (83 testes): health check, registro/login/`/me` (incluindo
+Cobertura atual (94 testes): health check, registro/login/`/me`/logout (incluindo
 senha fraca, e-mail duplicado, mensagem genérica de erro no login), rate
 limiting em `/auth/login`, CRUD de categorias, transações, dívidas e metas
 (incluindo isolamento entre usuários e as regras de conflito/validação), o
@@ -191,9 +200,11 @@ docker compose up --build      # depois: http://localhost:3000
 docker compose down            # para tudo (os dados ficam no volume postgres_data)
 ```
 
-O compose é pensado para uso local (`NODE_ENV=development`, `JWT_SECRET`
-padrão). Para um deploy real, defina `NODE_ENV=production` e um
-`JWT_SECRET` de verdade — a API se recusa a subir em produção com o padrão.
+A API roda em `NODE_ENV=production`. Se `JWT_SECRET` não for definido (ou
+estiver com o valor de exemplo), o container gera um segredo aleatório na
+primeira subida e o guarda no volume `api_data`
+(`apps/api/docker-entrypoint.sh`). Para usar um segredo próprio, defina
+`JWT_SECRET` no ambiente ou no `.env` da raiz.
 O código não é montado como volume: depois de mudar algo, rode
 `docker compose up --build` de novo (para desenvolver, prefira `pnpm dev`).
 
