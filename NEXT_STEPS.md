@@ -24,8 +24,10 @@ Resumo do que já existe:
   lançar uma transação nela desconta automaticamente o saldo da dívida
   (create/update/delete todos sincronizam)
 - CRUD de metas com histórico de aportes (GoalContribution)
+- Resumo do dashboard em GET /dashboard/summary (totais, gastos por
+  categoria, crédito × débito, série mensal, dívidas e metas)
 - CORS restrito por CORS_ORIGIN + Helmet
-- 76 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
+- 83 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
   execução, sem tocar no banco de dev)
 
 Ainda falta:

@@ -82,6 +82,10 @@ Definido em `apps/api/prisma/schema.prisma`:
 - **`GET/POST /goals`**, **`GET/PATCH/DELETE /goals/:id`** — `currentAmount` é opcional na criação e assume 0 por padrão.
 - **`GET/POST /goals/:id/contributions`**, **`DELETE /goals/:id/contributions/:contributionId`** — registrar um aporte cria o histórico (`GoalContribution`) e soma em `currentAmount`; remover reverte o valor.
 
+### Dashboard
+
+- **`GET /dashboard/summary`** — `?from=&to=` (inclusivos; padrão: mês corrente em UTC) e `?months=1..24` (padrão 6). Retorna os números prontos para o dashboard: `totals` (receitas, gastos, saldo) do período, `expensesByCategory` (ordenado do maior para o menor), `expensesByPaymentMethod` (`CREDIT`/`DEBIT`/`unspecified`), `monthly` (série dos últimos `months` meses terminando no mês de `to`, com meses vazios zerados) e o resumo atual de `debts` e `goals`. Somas feitas em centavos inteiros.
+
 Todas as rotas acima exigem `Authorization: Bearer <token>` e só operam sobre dados do próprio usuário (retornam 404 para recursos de outros usuários).
 
 ## Autenticação
@@ -123,7 +127,7 @@ container ao final — não usa o banco de desenvolvimento nem deixa rastro.
 pnpm --filter @finance/api test
 ```
 
-Cobertura atual (76 testes): health check, registro/login/`/me` (incluindo
+Cobertura atual (83 testes): health check, registro/login/`/me` (incluindo
 senha fraca, e-mail duplicado, mensagem genérica de erro no login), rate
 limiting em `/auth/login`, CRUD de categorias, transações, dívidas e metas
 (incluindo isolamento entre usuários e as regras de conflito/validação), o

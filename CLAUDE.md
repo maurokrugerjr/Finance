@@ -53,7 +53,7 @@ Restrito a `packages/types`: sem etapa de build — é consumido como código Ty
 
 ## Arquitetura do backend (`apps/api`)
 
-**Formato dos módulos.** Cada domínio mora em `src/modules/<nome>/routes.ts`, exportando um `FastifyPluginAsync` registrado em `src/app.ts` sob um prefixo (`/auth`, `/categories`, `/transactions`, `/debts`, `/goals`, `/health`). Todo módulo, exceto `auth` e `health`, começa com `app.addHook("preHandler", app.authenticate)` e restringe toda query do Prisma por `request.user.userId` — não existe visibilidade entre usuários em lugar nenhum, e novas rotas devem seguir esse padrão (buscar já filtrando por `userId` no `where`, não buscar e depois checar).
+**Formato dos módulos.** Cada domínio mora em `src/modules/<nome>/routes.ts`, exportando um `FastifyPluginAsync` registrado em `src/app.ts` sob um prefixo (`/auth`, `/categories`, `/transactions`, `/debts`, `/goals`, `/dashboard`, `/health`). Todo módulo, exceto `auth` e `health`, começa com `app.addHook("preHandler", app.authenticate)` e restringe toda query do Prisma por `request.user.userId` — não existe visibilidade entre usuários em lugar nenhum, e novas rotas devem seguir esse padrão (buscar já filtrando por `userId` no `where`, não buscar e depois checar).
 
 **Auth** (`src/plugins/auth.ts`): `@fastify/jwt` decora `request.user` como `{ userId: string }`. Tokens são assinados com expiração padrão de 7 dias (`JWT_EXPIRES_IN`). A aplicação recusa subir se `NODE_ENV=production` e `JWT_SECRET` ainda estiver com o valor placeholder padrão — isso é intencional, não relaxar essa checagem.
 
