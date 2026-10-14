@@ -147,3 +147,57 @@ export type GoalContribution = z.infer<typeof goalContributionSchema>;
 
 export const goalContributionCreateInput = goalContributionSchema.omit({ id: true });
 export type GoalContributionCreateInput = z.infer<typeof goalContributionCreateInput>;
+
+// Período padrão do resumo: mês corrente (UTC). `from`/`to` são inclusivos,
+// como nos filtros de /transactions; `months` controla a série mensal.
+export const dashboardSummaryQuery = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  months: z.coerce.number().int().min(1).max(24).default(6),
+});
+export type DashboardSummaryQuery = z.infer<typeof dashboardSummaryQuery>;
+
+export const dashboardSummarySchema = z.object({
+  period: z.object({ from: z.coerce.date(), to: z.coerce.date() }),
+  totals: z.object({
+    income: z.number(),
+    expense: z.number(),
+    balance: z.number(),
+  }),
+  expensesByCategory: z.array(
+    z.object({
+      categoryId: z.string().uuid(),
+      name: z.string(),
+      icon: z.string().nullable(),
+      color: z.string().nullable(),
+      total: z.number(),
+    }),
+  ),
+  // Gastos sem paymentMethod informado entram em `unspecified`.
+  expensesByPaymentMethod: z.object({
+    CREDIT: z.number(),
+    DEBIT: z.number(),
+    unspecified: z.number(),
+  }),
+  // Últimos `months` meses terminando no mês de `to`, formato "YYYY-MM" (UTC),
+  // incluindo meses sem lançamentos (zerados).
+  monthly: z.array(
+    z.object({
+      month: z.string(),
+      income: z.number(),
+      expense: z.number(),
+    }),
+  ),
+  debts: z.object({
+    count: z.number().int(),
+    totalAmount: z.number(),
+    remainingAmount: z.number(),
+    minimumPaymentTotal: z.number(),
+  }),
+  goals: z.object({
+    count: z.number().int(),
+    targetAmount: z.number(),
+    currentAmount: z.number(),
+  }),
+});
+export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
