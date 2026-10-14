@@ -1,4 +1,6 @@
 FROM node:20-alpine AS base
+# openssl é necessário para os engines do Prisma no Alpine.
+RUN apk add --no-cache openssl
 RUN corepack enable
 WORKDIR /app
 
@@ -16,5 +18,7 @@ RUN pnpm --filter @finance/api build
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=build /app /app
+WORKDIR /app/apps/api
 EXPOSE 3333
-CMD ["node", "apps/api/dist/server.js"]
+# Aplica as migrations pendentes antes de subir (idempotente).
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm start"]

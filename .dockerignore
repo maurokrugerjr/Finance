@@ -1,0 +1,15 @@
+# Dependências e builds são gerados dentro da imagem; copiar os do host
+# (WSL/Windows) sobrescreveria os do container.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.log
+
+# Segredos locais nunca vão para a imagem.
+**/.env
+**/.env.*
+!**/.env.example
+
+.git

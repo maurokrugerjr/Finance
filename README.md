@@ -183,9 +183,19 @@ pnpm dev
 
 ### Alternativa: tudo via Docker Compose
 
+Não precisa de `.env` nem de Node instalado — o compose já define as
+variáveis e a API aplica as migrations sozinha ao subir:
+
 ```bash
-docker compose up --build
+docker compose up --build      # depois: http://localhost:3000
+docker compose down            # para tudo (os dados ficam no volume postgres_data)
 ```
+
+O compose é pensado para uso local (`NODE_ENV=development`, `JWT_SECRET`
+padrão). Para um deploy real, defina `NODE_ENV=production` e um
+`JWT_SECRET` de verdade — a API se recusa a subir em produção com o padrão.
+O código não é montado como volume: depois de mudar algo, rode
+`docker compose up --build` de novo (para desenvolver, prefira `pnpm dev`).
 
 ## Status atual
 
@@ -194,7 +204,7 @@ Esqueleto inicial do projeto:
 - [x] Estrutura de monorepo (pnpm + Turborepo)
 - [x] Modelo de dados completo no Prisma
 - [x] API Fastify com plugins de Prisma/JWT
-- [x] Frontend Next.js + Tailwind com página inicial placeholder
+- [x] Frontend Next.js + Tailwind com login/cadastro e área logada (dashboard ainda placeholder)
 - [x] Docker Compose para ambiente local
 - [x] CRUD de categorias (`/categories`) — list (com filtro por `kind`), get, create, update, delete
 - [x] CRUD de transações (`/transactions`) — list (com filtros por `type`/`categoryId`/`paymentMethod`/período), get, create, update, delete, validando que a categoria pertence ao usuário
