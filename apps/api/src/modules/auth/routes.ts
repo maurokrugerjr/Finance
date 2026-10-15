@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { registerInput, loginInput } from "@finance/types";
+import { DEFAULT_CATEGORIES } from "../budget/defaults";
 
 const SALT_ROUNDS = 12;
 
@@ -39,8 +40,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     let user;
     try {
+      // Já cria as categorias padrão (com o plano sugerido) para a conta
+      // nova não começar vazia.
       user = await app.prisma.user.create({
-        data: { email, passwordHash, name },
+        data: { email, passwordHash, name, categories: { create: DEFAULT_CATEGORIES } },
       });
     } catch (err) {
       // Dois cadastros simultâneos com o mesmo e-mail passam pela checagem

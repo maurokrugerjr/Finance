@@ -27,15 +27,17 @@ Resumo do que já existe:
 - Resumo do dashboard em GET /dashboard/summary (totais, gastos por
   categoria, crédito × débito, série mensal, dívidas e metas)
 - CORS restrito por CORS_ORIGIN + Helmet
-- 94 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
+- 106 testes automatizados (Vitest + Testcontainers, Postgres efêmero por
   execução, sem tocar no banco de dev)
 
+- Plano de gastos: renda fixa + percentual por categoria (GET/PUT /budget),
+  categorias padrão criadas no cadastro, projeção de quitação no dashboard
+- Frontend: painel do mês, "Meu plano" (pelo nome no cabeçalho: renda,
+  categorias e divisão) e "Lançar" (gasto/receita)
+
 Ainda falta:
-- Motor de sugestão de economia (quanto guardar por mês, com base em
-  receita − gastos fixos − parcelas de dívida)
-- Frontend de verdade — hoje é só uma página inicial placeholder; falta
-  telas de login/cadastro, dashboard com gráficos (Recharts), e CRUD visual
-  de categorias/transações/dívidas/metas
+- Telas de dívidas e metas (e ligar categoria ↔ dívida pela UI)
+- Editar/apagar lançamentos pelo frontend
 
 Ideia futura: importar gastos automaticamente a partir dos e-mails de
 comprovante do banco no Gmail (IA extrai valor/data/crédito-débito e sugere

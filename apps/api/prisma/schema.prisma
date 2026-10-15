@@ -8,19 +8,29 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
   // Incrementado no logout: tokens com versão antiga deixam de valer.
-  tokenVersion Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  tokenVersion  Int      @default(0)
+  // Renda fixa mensal usada como base do plano de gastos (null = plano não configurado).
+  monthlyIncome Decimal? @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   categories   Category[]
   transactions Transaction[]
   debts        Debt[]
   goals        Goal[]
+}
+
+// Grupos do plano de gastos. SAVINGS e DEBTS formam o bloco "Futuro" na UI.
+enum BudgetGroup {
+  ESSENTIALS
+  LIFESTYLE
+  SAVINGS
+  DEBTS
 }
 
 enum CategoryKind {
@@ -35,6 +45,10 @@ model Category {
   icon      String?
   color     String?
   createdAt DateTime     @default(now())
+
+  // Fatia da renda mensal planejada para esta categoria (só EXPENSE; null = fora do plano).
+  budgetPercent Decimal?     @db.Decimal(5, 2)
+  budgetGroup   BudgetGroup?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

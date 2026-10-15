@@ -1,6 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 import { dashboardSummaryQuery, type DashboardSummary } from "@finance/types";
+import { loadBudget } from "../budget/routes";
+import { simulateDebtPayoff } from "../debts/simulate";
 
 // Somas feitas em centavos inteiros para evitar deriva de ponto flutuante.
 function toCents(value: Prisma.Decimal | null | undefined) {
@@ -38,7 +40,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
     const periodWhere = { userId, date: { gte: from, lte: to } };
     const monthlyStart = startOfMonthUTC(to, -(query.data.months - 1));
 
-    const [byType, byCategory, byPaymentMethod, monthlyTransactions, debts, goals] =
+    const [byType, byCategory, byPaymentMethod, monthlyTransactions, debts, goals, budget, openDebts] =
       await Promise.all([
         app.prisma.transaction.groupBy({
           by: ["type"],
@@ -68,6 +70,11 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           where: { userId },
           _count: true,
           _sum: { targetAmount: true, currentAmount: true },
+        }),
+        loadBudget(app.prisma, userId),
+        app.prisma.debt.findMany({
+          where: { userId, remainingAmount: { gt: 0 } },
+          select: { id: true, name: true, remainingAmount: true, interestRate: true, minimumPayment: true },
         }),
       ]);
 
@@ -107,6 +114,35 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       else bucket.expense += toCents(transaction.amount);
     }
 
+    const spentByCategory = new Map(expensesByCategory.map((row) => [row.categoryId, row.total]));
+
+    // A fatia DEBTS do plano é o quanto vai para dívidas por mês; o que passar
+    // da soma dos mínimos entra como pagamento extra na simulação (avalanche).
+    const debtBudgetCents = budget.items
+      .filter((item) => item.group === "DEBTS")
+      .reduce((sum, item) => sum + Math.round(item.planned * 100), 0);
+    let debtPayoff: DashboardSummary["debtPayoff"] = null;
+    if (openDebts.length > 0 && debtBudgetCents > 0) {
+      const minimumsCents = openDebts.reduce((sum, debt) => sum + toCents(debt.minimumPayment), 0);
+      const plan = simulateDebtPayoff(
+        openDebts.map((debt) => ({
+          id: debt.id,
+          name: debt.name,
+          remainingAmount: Number(debt.remainingAmount),
+          interestRate: Number(debt.interestRate),
+          minimumPayment: Number(debt.minimumPayment),
+        })),
+        fromCents(Math.max(0, debtBudgetCents - minimumsCents)),
+        "AVALANCHE",
+      );
+      debtPayoff = {
+        monthlyPayment: fromCents(Math.max(debtBudgetCents, minimumsCents)),
+        possible: plan.possible,
+        months: plan.months,
+        debtFreeDate: plan.debtFreeDate,
+      };
+    }
+
     const summary: DashboardSummary = {
       period: { from, to },
       totals: {
@@ -125,6 +161,11 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         income: fromCents(bucket.income),
         expense: fromCents(bucket.expense),
       })),
+      budget: {
+        monthlyIncome: budget.monthlyIncome,
+        items: budget.items.map((item) => ({ ...item, spent: spentByCategory.get(item.categoryId) ?? 0 })),
+      },
+      debtPayoff,
       debts: {
         count: debts._count,
         totalAmount: fromCents(toCents(debts._sum.totalAmount)),

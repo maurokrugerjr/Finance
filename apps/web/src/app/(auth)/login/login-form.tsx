@@ -7,7 +7,7 @@ import { loginInput } from "@finance/types";
 import { Alert, Button, Field, PasswordField } from "@/components/ui";
 import { errorMessage } from "@/lib/errors";
 import { useAuth } from "@/providers/auth-provider";
-import { focusFirstError } from "../form-utils";
+import { focusFirstError } from "@/lib/form";
 
 const FIELDS = ["email", "password"] as const;
 type FieldName = (typeof FIELDS)[number];

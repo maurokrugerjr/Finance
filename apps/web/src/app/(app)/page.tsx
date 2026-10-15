@@ -1,15 +1,14 @@
-"use client";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { Dashboard } from "@/components/dashboard/dashboard";
 
-import { useAuth } from "@/providers/auth-provider";
+export const metadata: Metadata = { title: "Painel" };
 
-export default function HomePage() {
-  const { user } = useAuth();
-  const firstName = user?.name.split(" ")[0];
-
+export default function DashboardPage() {
+  // useSearchParams (mês em ?mes=) precisa de um Suspense acima.
   return (
-    <div className="flex flex-col gap-2">
-      <h1 className="text-2xl font-semibold">Olá{firstName ? `, ${firstName}` : ""}!</h1>
-      <p className="text-muted">O dashboard vai aparecer aqui.</p>
-    </div>
+    <Suspense>
+      <Dashboard />
+    </Suspense>
   );
 }

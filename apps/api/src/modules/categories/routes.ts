@@ -2,8 +2,16 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { categoryCreateInput, categoryUpdateInput, CategoryKind } from "@finance/types";
+import { DEFAULT_CATEGORIES } from "../budget/defaults";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
+
+function serializeCategory<T extends { budgetPercent: Prisma.Decimal | null }>(category: T) {
+  return {
+    ...category,
+    budgetPercent: category.budgetPercent === null ? null : Number(category.budgetPercent),
+  };
+}
 const listQuerySchema = z.object({ kind: CategoryKind.optional() });
 
 // Um debtId só faz sentido em categorias de gasto, e precisa apontar para
@@ -30,13 +38,34 @@ export const categoryRoutes: FastifyPluginAsync = async (app) => {
     const query = listQuerySchema.safeParse(request.query);
     if (!query.success) return reply.badRequest(query.error.message);
 
-    return app.prisma.category.findMany({
+    const categories = await app.prisma.category.findMany({
       where: {
         userId: request.user.userId,
         ...(query.data.kind ? { kind: query.data.kind } : {}),
       },
       orderBy: { name: "asc" },
     });
+    return categories.map(serializeCategory);
+  });
+
+  // Cria as categorias sugeridas que ainda não existem (por nome + tipo).
+  // Só traz a divisão sugerida do plano se o usuário ainda não tem plano —
+  // senão a soma poderia passar de 100%.
+  app.post("/defaults", async (request, reply) => {
+    const userId = request.user.userId;
+    const hasPlan = (await app.prisma.category.count({ where: { userId, budgetPercent: { not: null } } })) > 0;
+
+    await app.prisma.category.createMany({
+      data: DEFAULT_CATEGORIES.map(({ budgetGroup, budgetPercent, ...category }) => ({
+        ...category,
+        ...(hasPlan ? {} : { budgetGroup, budgetPercent }),
+        userId,
+      })),
+      skipDuplicates: true,
+    });
+
+    const categories = await app.prisma.category.findMany({ where: { userId }, orderBy: { name: "asc" } });
+    return reply.code(201).send(categories.map(serializeCategory));
   });
 
   app.get("/:id", async (request, reply) => {
@@ -48,7 +77,7 @@ export const categoryRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!category) return reply.notFound("Category not found");
 
-    return category;
+    return serializeCategory(category);
   });
 
   app.post("/", async (request, reply) => {
@@ -67,7 +96,7 @@ export const categoryRoutes: FastifyPluginAsync = async (app) => {
       const category = await app.prisma.category.create({
         data: { ...body.data, userId: request.user.userId },
       });
-      return reply.code(201).send(category);
+      return reply.code(201).send(serializeCategory(category));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         return reply.conflict("A category with this name and kind already exists");
@@ -98,10 +127,15 @@ export const categoryRoutes: FastifyPluginAsync = async (app) => {
     if (debtLinkError) return reply.badRequest(debtLinkError);
 
     try {
-      return await app.prisma.category.update({
+      const category = await app.prisma.category.update({
         where: { id: existing.id },
-        data: body.data,
+        // Receita não entra no plano de gastos: ao virar INCOME, sai dele.
+        data: {
+          ...body.data,
+          ...(effectiveKind === "INCOME" ? { budgetPercent: null, budgetGroup: null } : {}),
+        },
       });
+      return serializeCategory(category);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         return reply.conflict("A category with this name and kind already exists");

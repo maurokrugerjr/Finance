@@ -65,7 +65,7 @@ describe("GET /dashboard/summary", () => {
   });
 
   it("aggregates totals, categories and payment methods within the period", async () => {
-    const salary = await createCategory(app, auth.userId, { name: "Salário", kind: "INCOME" });
+    const salary = await createCategory(app, auth.userId, { name: "Freela", kind: "INCOME" });
     const food = await createCategory(app, auth.userId, { name: "Alimentação" });
     const transport = await createCategory(app, auth.userId, { name: "Transporte" });
 
@@ -94,7 +94,7 @@ describe("GET /dashboard/summary", () => {
   });
 
   it("builds a monthly series ending at the month of `to`, including empty months", async () => {
-    const salary = await createCategory(app, auth.userId, { name: "Salário", kind: "INCOME" });
+    const salary = await createCategory(app, auth.userId, { name: "Freela", kind: "INCOME" });
     const food = await createCategory(app, auth.userId);
 
     await createTransaction(auth.userId, food.id, { amount: 70, date: "2025-12-15" }); // antes da janela

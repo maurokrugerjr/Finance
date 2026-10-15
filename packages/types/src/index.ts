@@ -37,6 +37,10 @@ export type CategoryKind = z.infer<typeof CategoryKind>;
 export const PaymentMethod = z.enum(["DEBIT", "CREDIT"]);
 export type PaymentMethod = z.infer<typeof PaymentMethod>;
 
+// Grupos do plano de gastos; na UI, SAVINGS + DEBTS aparecem juntos como "Futuro".
+export const BudgetGroup = z.enum(["ESSENTIALS", "LIFESTYLE", "SAVINGS", "DEBTS"]);
+export type BudgetGroup = z.infer<typeof BudgetGroup>;
+
 export const DebtStrategy = z.enum(["SNOWBALL", "AVALANCHE"]);
 export type DebtStrategy = z.infer<typeof DebtStrategy>;
 
@@ -49,10 +53,13 @@ export const categorySchema = z.object({
   // Quando definido (só permitido em categorias EXPENSE), toda transação
   // lançada nesta categoria desconta automaticamente da dívida vinculada.
   debtId: z.string().uuid().nullable().optional(),
+  // Definidos pelo plano (PUT /budget), não pelo CRUD de categorias.
+  budgetPercent: z.number().nullable().optional(),
+  budgetGroup: BudgetGroup.nullable().optional(),
 });
 export type Category = z.infer<typeof categorySchema>;
 
-export const categoryCreateInput = categorySchema.omit({ id: true });
+export const categoryCreateInput = categorySchema.omit({ id: true, budgetPercent: true, budgetGroup: true });
 export type CategoryCreateInput = z.infer<typeof categoryCreateInput>;
 
 export const categoryUpdateInput = categoryCreateInput.partial();
@@ -192,6 +199,29 @@ export const dashboardSummarySchema = z.object({
       expense: z.number(),
     }),
   ),
+  // Plano do mês: quanto de cada categoria estava planejado e quanto já saiu.
+  budget: z.object({
+    monthlyIncome: z.number().nullable(),
+    items: z.array(
+      z.object({
+        categoryId: z.string().uuid(),
+        name: z.string(),
+        group: BudgetGroup,
+        percent: z.number(),
+        planned: z.number(),
+        spent: z.number(),
+      }),
+    ),
+  }),
+  // Projeção usando a fatia DEBTS do plano como pagamento mensal (estratégia avalanche).
+  debtPayoff: z
+    .object({
+      monthlyPayment: z.number(),
+      possible: z.boolean(),
+      months: z.number().int().nullable(),
+      debtFreeDate: z.coerce.date().nullable(),
+    })
+    .nullable(),
   debts: z.object({
     count: z.number().int(),
     totalAmount: z.number(),
@@ -205,3 +235,35 @@ export const dashboardSummarySchema = z.object({
   }),
 });
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+export const budgetItemSchema = z.object({
+  categoryId: z.string().uuid(),
+  name: z.string(),
+  group: BudgetGroup,
+  percent: z.number(),
+  planned: z.number(),
+});
+export type BudgetItem = z.infer<typeof budgetItemSchema>;
+
+export const budgetSchema = z.object({
+  monthlyIncome: z.number().nullable(),
+  totalPercent: z.number(),
+  items: z.array(budgetItemSchema),
+});
+export type Budget = z.infer<typeof budgetSchema>;
+
+// Substitui o plano inteiro: categorias de gasto fora de `items` saem do plano.
+export const budgetUpdateInput = z.object({
+  monthlyIncome: z.number().positive().max(1_000_000_000),
+  items: z
+    .array(
+      z.object({
+        categoryId: z.string().uuid(),
+        group: BudgetGroup,
+        percent: z.number().min(0).max(100).multipleOf(0.01),
+      }),
+    )
+    .refine((items) => new Set(items.map((i) => i.categoryId)).size === items.length, "Duplicate categoryId")
+    .refine((items) => items.reduce((sum, i) => sum + i.percent, 0) <= 100.0001, "Percentages must add up to at most 100"),
+});
+export type BudgetUpdateInput = z.infer<typeof budgetUpdateInput>;

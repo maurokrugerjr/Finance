@@ -14,6 +14,7 @@ import { transactionRoutes } from "./modules/transactions/routes";
 import { debtRoutes } from "./modules/debts/routes";
 import { goalRoutes } from "./modules/goals/routes";
 import { dashboardRoutes } from "./modules/dashboard/routes";
+import { budgetRoutes } from "./modules/budget/routes";
 
 const DEFAULT_CORS_ORIGIN = "http://localhost:3000";
 
@@ -39,6 +40,7 @@ export async function buildApp() {
   await app.register(debtRoutes, { prefix: "/debts" });
   await app.register(goalRoutes, { prefix: "/goals" });
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
+  await app.register(budgetRoutes, { prefix: "/budget" });
 
   return app;
 }

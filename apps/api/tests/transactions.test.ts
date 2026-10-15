@@ -150,7 +150,7 @@ describe("transactions", () => {
   });
 
   it("filters transactions by type", async () => {
-    const incomeCategory = await createCategory(app, auth.userId, { name: "Salário", kind: "INCOME" });
+    const incomeCategory = await createCategory(app, auth.userId, { name: "Freela", kind: "INCOME" });
 
     await app.prisma.transaction.create({
       data: {

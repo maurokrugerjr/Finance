@@ -7,6 +7,7 @@ import {
   createCategory,
   createDebt,
 } from "./helpers";
+import { DEFAULT_CATEGORIES } from "../src/modules/budget/defaults";
 
 describe("categories", () => {
   let app: FastifyInstance;
@@ -53,23 +54,61 @@ describe("categories", () => {
   });
 
   it("lists categories scoped to the authenticated user, filterable by kind", async () => {
-    await createCategory(app, auth.userId, { name: "Salário", kind: "INCOME" });
-    await createCategory(app, auth.userId, { name: "Mercado", kind: "EXPENSE" });
-
     const other = await registerUser(app);
     await createCategory(app, other.userId, { name: "Categoria de outro usuário", kind: "EXPENSE" });
 
     const all = await app.inject({ method: "GET", url: "/categories", headers: auth.authHeader });
-    expect(JSON.parse(all.payload)).toHaveLength(2);
+    const allBody = JSON.parse(all.payload) as { name: string; kind: string }[];
+    expect(allBody).toHaveLength(DEFAULT_CATEGORIES.length);
+    expect(allBody.map((c) => c.name)).not.toContain("Categoria de outro usuário");
 
     const onlyIncome = await app.inject({
       method: "GET",
       url: "/categories?kind=INCOME",
       headers: auth.authHeader,
     });
-    const incomeBody = JSON.parse(onlyIncome.payload);
-    expect(incomeBody).toHaveLength(1);
-    expect(incomeBody[0].name).toBe("Salário");
+    const incomeBody = JSON.parse(onlyIncome.payload) as { kind: string }[];
+    expect(incomeBody.length).toBeGreaterThan(0);
+    expect(incomeBody.every((c) => c.kind === "INCOME")).toBe(true);
+  });
+
+  it("creates the default categories (with the suggested plan) on registration", async () => {
+    const res = await app.inject({ method: "GET", url: "/categories", headers: auth.authHeader });
+    const body = JSON.parse(res.payload) as { name: string; budgetPercent: number | null }[];
+
+    const market = body.find((c) => c.name === "Mercado");
+    expect(market?.budgetPercent).toBe(15);
+    expect(body.find((c) => c.name === "Salário")?.budgetPercent).toBeNull();
+  });
+
+  describe("POST /categories/defaults", () => {
+    it("creates the suggested categories with the plan for an account without categories", async () => {
+      await app.prisma.category.deleteMany({ where: { userId: auth.userId } });
+
+      const res = await app.inject({ method: "POST", url: "/categories/defaults", headers: auth.authHeader });
+
+      expect(res.statusCode).toBe(201);
+      const body = JSON.parse(res.payload) as { name: string; budgetPercent: number | null }[];
+      expect(body).toHaveLength(DEFAULT_CATEGORIES.length);
+      expect(body.find((c) => c.name === "Mercado")?.budgetPercent).toBe(15);
+    });
+
+    it("only adds missing categories and keeps an existing plan untouched", async () => {
+      await app.prisma.category.deleteMany({ where: { userId: auth.userId } });
+      await createCategory(app, auth.userId, { name: "Mercado" });
+      await app.prisma.category.updateMany({
+        where: { userId: auth.userId, name: "Mercado" },
+        data: { budgetPercent: 40, budgetGroup: "ESSENTIALS" },
+      });
+
+      const res = await app.inject({ method: "POST", url: "/categories/defaults", headers: auth.authHeader });
+
+      const body = JSON.parse(res.payload) as { name: string; budgetPercent: number | null }[];
+      expect(body).toHaveLength(DEFAULT_CATEGORIES.length);
+      expect(body.find((c) => c.name === "Mercado")?.budgetPercent).toBe(40);
+      // Com plano existente, as novas entram sem porcentagem (a soma não passa de 100%).
+      expect(body.find((c) => c.name === "Gasolina")?.budgetPercent).toBeNull();
+    });
   });
 
   it("returns 404 for a category belonging to another user", async () => {

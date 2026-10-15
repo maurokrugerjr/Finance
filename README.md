@@ -82,9 +82,16 @@ Definido em `apps/api/prisma/schema.prisma`:
 - **`GET/POST /goals`**, **`GET/PATCH/DELETE /goals/:id`** — `currentAmount` é opcional na criação e assume 0 por padrão.
 - **`GET/POST /goals/:id/contributions`**, **`DELETE /goals/:id/contributions/:contributionId`** — registrar um aporte cria o histórico (`GoalContribution`) e soma em `currentAmount`; remover reverte o valor.
 
+### Plano de gastos
+
+- **`GET /budget`** — `{ monthlyIncome, totalPercent, items: [{ categoryId, name, group, percent, planned }] }`. O plano é a renda fixa mensal (`User.monthlyIncome`) dividida em percentuais por categoria de gasto (`Category.budgetPercent`/`budgetGroup`). Grupos: `ESSENTIALS`, `LIFESTYLE`, `SAVINGS`, `DEBTS` (os dois últimos aparecem juntos como "Futuro" na UI).
+- **`PUT /budget`** — `{ monthlyIncome, items: [{ categoryId, group, percent }] }` substitui o plano inteiro (categorias fora de `items` saem do plano). Soma ≤ 100%, só categorias `EXPENSE` do próprio usuário, sem repetição.
+- O cadastro já cria categorias padrão com uma divisão sugerida (Moradia e contas 20%, Mercado 15%, Gasolina 10%, Saúde 5%, Quitação de dívidas 15%, Reserva de emergência 10%, Esporte 5%, Lazer e bobagens 10%, Outros 10%) + Salário/Outras receitas. Ver `apps/api/src/modules/budget/defaults.ts`.
+- **`POST /categories/defaults`** — cria as categorias sugeridas que ainda não existem (por nome + tipo), para contas antigas ou que apagaram tudo. Só preenche a divisão sugerida se o usuário ainda não tiver plano (para a soma não passar de 100%).
+
 ### Dashboard
 
-- **`GET /dashboard/summary`** — `?from=&to=` (inclusivos; padrão: mês corrente em UTC) e `?months=1..24` (padrão 6). Retorna os números prontos para o dashboard: `totals` (receitas, gastos, saldo) do período, `expensesByCategory` (ordenado do maior para o menor), `expensesByPaymentMethod` (`CREDIT`/`DEBIT`/`unspecified`), `monthly` (série dos últimos `months` meses terminando no mês de `to`, com meses vazios zerados) e o resumo atual de `debts` e `goals`. Somas feitas em centavos inteiros.
+- **`GET /dashboard/summary`** — `?from=&to=` (inclusivos; padrão: mês corrente em UTC) e `?months=1..24` (padrão 6). Retorna os números prontos para o dashboard: `totals` (receitas, gastos, saldo) do período, `expensesByCategory` (ordenado do maior para o menor), `expensesByPaymentMethod` (`CREDIT`/`DEBIT`/`unspecified`), `monthly` (série dos últimos `months` meses terminando no mês de `to`, com meses vazios zerados) e o resumo atual de `debts` e `goals`. Inclui também `budget` (planejado × gasto por item do plano no período) e `debtPayoff` (data prevista para quitar todas as dívidas usando a fatia `DEBTS` do plano como pagamento mensal, estratégia avalanche; `null` sem dívidas abertas ou sem fatia de dívidas). Somas feitas em centavos inteiros.
 
 Todas as rotas acima exigem `Authorization: Bearer <token>` e só operam sobre dados do próprio usuário (retornam 404 para recursos de outros usuários).
 
@@ -136,7 +143,7 @@ container ao final — não usa o banco de desenvolvimento nem deixa rastro.
 pnpm --filter @finance/api test
 ```
 
-Cobertura atual (94 testes): health check, registro/login/`/me`/logout (incluindo
+Cobertura atual (106 testes): health check, registro/login/`/me`/logout (incluindo
 senha fraca, e-mail duplicado, mensagem genérica de erro no login), rate
 limiting em `/auth/login`, CRUD de categorias, transações, dívidas e metas
 (incluindo isolamento entre usuários e as regras de conflito/validação), o
@@ -215,7 +222,7 @@ Esqueleto inicial do projeto:
 - [x] Estrutura de monorepo (pnpm + Turborepo)
 - [x] Modelo de dados completo no Prisma
 - [x] API Fastify com plugins de Prisma/JWT
-- [x] Frontend Next.js + Tailwind com login/cadastro e área logada (dashboard ainda placeholder)
+- [x] Frontend Next.js + Tailwind: login/cadastro, painel do mês (plano × gasto, gastos por categoria, últimos 6 meses, lançamentos), "Meu plano" (acessado pelo nome no canto superior direito: renda fixa, categorias de gasto/receita e percentuais) e "Lançar" (gasto/receita)
 - [x] Docker Compose para ambiente local
 - [x] CRUD de categorias (`/categories`) — list (com filtro por `kind`), get, create, update, delete
 - [x] CRUD de transações (`/transactions`) — list (com filtros por `type`/`categoryId`/`paymentMethod`/período), get, create, update, delete, validando que a categoria pertence ao usuário
